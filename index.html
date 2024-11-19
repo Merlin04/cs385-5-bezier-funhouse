@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>a Bézier funhouse</title</title>
+
+    <script type="module" src="index.ts"></script>
+</head>
+
+<body>
+<canvas id="glcanvas" width="1024" height="512"></canvas>
+<br>
+<div id="colors">
+    <button data-color="adriatic">adriatic</button>
+    <button data-color="jade">jade</button>
+    <button data-color="travertine">travertine</button>
+    <button data-color="amethyst">amethyst</button>
+    <button data-color="fireball">fireball</button>
+</div>
+mirror:
+<button id="mirror-select" onclick="chooseMirror();">sphere -> bezier</button>
+<br>
+Place spheres or else position a <b>Bezier funhouse mirror</b>.<br>
+Use `ijkl` to control the light position.<br>
+Use `x` to delete a sphere.<br>
+SHIFT-click to control the curve of the funhouse mirror.<br>
+</body>
+</html>
