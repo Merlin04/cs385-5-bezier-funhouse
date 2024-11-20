@@ -606,11 +606,25 @@ vec2 deCasteljau(vec2 cp0, vec2 cp1, vec2 cp2, float fraction) {
 
     return point_secondary;
 }
-// each recursive call - check if it hits left half, right half, or neither
-// or, maybe just find intersection of ray projected into 2d with bezier?
-// probably examples online of how to do this
 
-ISect rayIntersectBezier(vec4 R, vec4 d, vec2 cp0, vec2 cp1, vec2 cp2) {
+// https://pomax.github.io/bezierinfo/#pointvectors
+vec2 bezierDerivative(vec2 P0, vec2 P1, vec2 P2, float t) {
+    float k = 1; // n - 1
+    return (
+    /* binom(k, 0) */ 1 * pow((1 - t), (k - 0)) * pow(t, 0) * 2 * (P1 - P0) +
+    /* binom(k, 1) */ 1 * pow((1 - t), (k - 1)) * pow(t, 1) * 2 * (P2 - P1)
+    );
+}
+
+vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t) {
+    vec2 tangent = bezierDerivative(P0, P1, P2, t);
+    return vec2(-1 * tangent.y, tangent.x);
+}
+
+#define ISECT_AT_T(t) \
+    rayIntersectPlane(R, d, deCasteljau(P0, P1, P2, t), bezierNormal(P0, P1, P2, t))
+
+ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
     //
     // This should return intersection information that results
     // from shooting a ray from point `R` in a direction `d`,
@@ -629,10 +643,15 @@ ISect rayIntersectBezier(vec4 R, vec4 d, vec2 cp0, vec2 cp1, vec2 cp2) {
     //
 
     // line from eyePosition to R
-    float y1 = eyePosition.y;
-    float y2 = R.y;
-    float x1 = eyePosition.x;
-    float x2 = R.x;
+//    float y1 = eyePosition.y;
+//    float y2 = R.y;
+//    float x1 = eyePosition.x;
+//    float x2 = R.x;
+    vec4 R2 = R + d;
+    float y1 = R.y;
+    float y2 = R2.y;
+    float x1 = R.x;
+    float x2 = R2.x;
 
     // get l, m, d in lx+my=d
     // https://stackoverflow.com/a/13242831
@@ -644,8 +663,29 @@ ISect rayIntersectBezier(vec4 R, vec4 d, vec2 cp0, vec2 cp1, vec2 cp2) {
     // equation of a quadratic bezier is C(t) = (1-t)^2 * P_0 + 2t(1-t) * P_1 + t^2 * P_2
     // we need to solve (1-t)^2 * (A dot P_0) + 2t(1-t) * (A dot P_1) + t^2 * (A dot P_2) - d = 0
 
+    // let Bx = A dot Px
+    float B0 = dot(A, P0);
+    float B1 = dot(A, P1);
+    float B2 = dot(A, P2);
 
-    return NO_INTERSECTION();
+    // solve 0=(B_{2}-2B_{1}+B_{0})t^{2}+(2B_{1}-2B_{0})t+(B_{0}-d)
+    // variables for quadratic formula
+    float a = B2 - 2 * B1 + B0;
+    float b = 2 * B1 - 2 * B0;
+    float c = B0 - d;
+
+    // quadratic formula
+    float discriminant = b * b - 4 * a * c;
+    if(discriminant < 0) {
+        return NO_INTERSECTION();
+    }
+
+    float positive_evaluation = (-1 * b + sqrt(discriminant)) / (2 * a);
+    if(discriminant = 0) {
+        return ISECT_AT_T(positive_evaluation);
+    }
+    float negative_evaluation = (-1 * b - sqrt(discriminant)) / (2 * a);
+    return bestISect(ISECT_AT_T(positive_evaluation), ISECT_AT_T(negative_evaluation));
 }
 
 ISect rayIntersectMirror(vec4 R, vec4 d) {
