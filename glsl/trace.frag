@@ -586,6 +586,26 @@ ISect rayClosestSphere(vec4 R, vec4 d) {
     return isect;
 }
 
+// Given control points and a fraction, give a point along the bezier curve
+// defined by the control points. Evaluate using De Casteljau's algorithm.
+vec2 deCasteljau(vec2 cp0, vec2 cp1, vec2 cp2, float fraction) {
+    // Produce point 0 by interpolating between cp0 and cp1
+    const vec2 cp0_scaled = cp0 * vec2(1 - fraction, 1 - fraction);
+    vec2 cp1_scaled = cp1 * vec2(fraction, fraction);
+    const vec2 point0 = cp0_scaled + cp1_scaled;
+
+    // Produce point 1 by interpolating between cp1 and cp2
+    cp1_scaled = cp1 * vec2(1 - fraction, 1 - fraction);
+    const vec2 cp2_scaled = cp2 * vec2(fraction, fraction);
+    const vec2 point1 = cp1_scaled + cp2_scaled;
+
+    // Produce final point by interpolating between point0 and point1
+    const vec2 point0_scaled = point0 * vec2(1 - fraction, 1 - fraction);
+    const vec2 point1_scaled = point1 * vec2(fraction, fraction);
+    const vec2 point_secondary = point0_scaled + point1_scaled;
+
+    return point_secondary;
+}
 // each recursive call - check if it hits left half, right half, or neither
 // or, maybe just find intersection of ray projected into 2d with bezier?
 // probably examples online of how to do this
