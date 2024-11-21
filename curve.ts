@@ -36,20 +36,7 @@ export class Curve {
         this.points = []; // The samples for the approximation of the curve.
         this.compiled = false; // Has `this.points` been computed?
     }
-
-    // de Casteljau evaluation
-    // didn't end up using but don't want to throw away (potentially) good code :)
-    #evaluateAt(pos: number) {
-        // [p_0, p_1, p_2, ..., p_n-1, p_n] => [[p_0, p_1], [p_1, p_2], ..., [p_n-1, p_n]]
-        const pairs = <T>(vals: T[]): [T, T][] => vals.length <= 1 ? [] : Array.from({ length: vals.length - 1 }, (_, i) => [vals[i], vals[i + 1]]);
-        // segment to new point
-        let c = (seg: [Point3d, Point3d]) => seg[0].combo(pos, seg[1]);
-        // recursively evaluate
-        let f = (segments: [Point3d, Point3d][]): Point3d =>
-            segments.length === 1 ? c(segments[0]) : f(pairs(segments.map(c)));
-        return f(pairs(this.controlPoints));
-    }
-
+    
     compile() {
         //
         // Recompiles the polyline that is a smooth sampling of the

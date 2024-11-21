@@ -484,7 +484,7 @@ ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
 
     float positive_evaluation = (-1.0 * b + sqrt(discriminant)) / (2.0 * a);
     ISect positive_isect = ISECT_OF_T(positive_evaluation);
-    if(discriminant == 0.0/* && positive_valid*/) {
+    if(discriminant == 0.0) {
         return positive_isect;
     }
     float negative_evaluation = (-1.0 * b - sqrt(discriminant)) / (2.0 * a);
