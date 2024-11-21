@@ -623,7 +623,11 @@ vec2 bezierDerivative(vec2 P0, vec2 P1, vec2 P2, float t) {
 
 vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t) {
     vec2 tangent = bezierDerivative(P0, P1, P2, t);
-    return vec2(-1.0 * tangent.y, tangent.x);
+    float rotation = -1.0;
+    if (tangent.x < 0.0) {
+        rotation = 1.0;
+    }
+    return vec2(tangent.y, rotation * tangent.x);
 }
 
 vec4 bezierNormalVec4(vec2 P0, vec2 P1, vec2 P2, float t) {
