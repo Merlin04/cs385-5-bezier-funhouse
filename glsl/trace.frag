@@ -368,6 +368,131 @@ bool rayHitsSphereBefore(vec4 R, vec4 d, vec4 C, float r, float limit) {
                 HITS_ANY = HITS_ANY || rhs_hits;                                                \
             };
 
+// Given control points and a fraction, give a point along the bezier curve
+// defined by the control points. Evaluate using De Casteljau's algorithm.
+vec2 deCasteljau(vec2 cp0, vec2 cp1, vec2 cp2, float fraction) {
+    // Produce point 0 by interpolating between cp0 and cp1
+    vec2 cp0_scaled = cp0 * (1.0 - fraction);
+    vec2 cp1_scaled = cp1 * fraction;
+    vec2 point0 = cp0_scaled + cp1_scaled;
+
+    // Produce point 1 by interpolating between cp1 and cp2
+    cp1_scaled = cp1 * (1.0 - fraction);
+    vec2 cp2_scaled = cp2 * fraction;
+    vec2 point1 = cp1_scaled + cp2_scaled;
+
+    // Produce final point by interpolating between point0 and point1
+    vec2 point0_scaled = point0 * (1.0 - fraction);
+    vec2 point1_scaled = point1 * fraction;
+    vec2 point_secondary = point0_scaled + point1_scaled;
+
+    return point_secondary;
+}
+
+vec4 deCasteljauVec4(vec2 cp0, vec2 cp1, vec2 cp2, float fraction) {
+    vec2 r = deCasteljau(cp0, cp1, cp2, fraction);
+    return vec4(r.x, 0.0, r.y, 1.0);
+}
+
+// https://pomax.github.io/bezierinfo/#pointvectors
+vec2 bezierDerivative(vec2 P0, vec2 P1, vec2 P2, float t) {
+    float k = 1.0; // n - 1
+    return (
+    /* binom(k, 0.0) */ 1.0 * pow((1.0 - t), (k - 0.0)) * pow(t, 0.0) * 2.0 * (P1 - P0) +
+    /* binom(k, 1.0) */ 1.0 * pow((1.0 - t), (k - 1.0)) * pow(t, 1.0) * 2.0 * (P2 - P1)
+    );
+}
+
+vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t) {
+    vec2 tangent = bezierDerivative(P0, P1, P2, t);
+    float rotation = -1.0;
+    if (tangent.x < 0.0) {
+        rotation = 1.0;
+    }
+    return vec2(tangent.y, rotation * tangent.x);
+}
+
+vec4 bezierNormalVec4(vec2 P0, vec2 P1, vec2 P2, float t) {
+    vec2 r = bezierNormal(P0, P1, P2, t);
+    return vec4(r.x, 0.0, r.y, 0.0);
+}
+
+bool t_is_valid(float t) {
+    return t >= 0.0 && t <= 1.0;
+}
+
+ISect isect_of_t(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2, float t) {
+    if(!t_is_valid(t)) return NO_INTERSECTION();
+    ISect i = rayIntersectPlane(R, d, deCasteljauVec4(P0, P1, P2, t), bezierNormalVec4(P0, P1, P2, t));
+    if(i.location.y < EPSILON || i.location.y > 1.5) return NO_INTERSECTION();
+    return i;
+}
+
+#define ISECT_OF_T(t) isect_of_t(R, d, P0, P1, P2, t)
+
+// https://www.desmos.com/calculator/a5zllcbzni
+ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
+    //
+    // This should return intersection information that results
+    // from shooting a ray from point `R` in a direction `d`,
+    // possibly hitting a Bezier mirror. If the mirror is hit,
+    // then the ISect struct should contain the location point
+    // where it was hit, the surface normal where it was hit,
+    // and its distance from the point along that ray. The `yes`
+    // component of the `ISect` should be set to 1.
+    //
+    // If they don't intersect, return NO_INTERSECTION().
+    //
+    // The mirror is given by control points whose floor
+    // coordinates sit at `cp0`, `cp1`, and `cp2`. You can make
+    // the mirror have any height you like. My demo used a
+    // height of 1.5.
+    //
+
+    vec4 R2 = R + d;
+    float y1 = R.z;
+    float y2 = R2.z;
+    float x1 = R.x;
+    float x2 = R2.x;
+
+    // get l, m, n in lx+my=n
+    // https://stackoverflow.com/a/13242831
+    float l = y1 - y2;
+    float m = x2 - x1;
+    float n = ((x1 - x2) * y1 + (y2 - y1) * x1) * -1.0;
+    vec2 A = vec2(l, m);
+
+    // equation of a quadratic bezier is C(t) = (1-t)^2 * P_0 + 2t(1-t) * P_1 + t^2 * P_2
+    // we need to solve (1-t)^2 * (A dot P_0) + 2t(1-t) * (A dot P_1) + t^2 * (A dot P_2) - d = 0
+
+    // let Bx = A dot Px
+    float B0 = dot(A, P0);
+    float B1 = dot(A, P1);
+    float B2 = dot(A, P2);
+
+    // solve 0=(B_{2}-2B_{1}+B_{0})t^{2}+(2B_{1}-2B_{0})t+(B_{0}-d)
+    // variables for quadratic formula
+    float a = B2 - 2.0 * B1 + B0;
+    float b = 2.0 * B1 - 2.0 * B0;
+    float c = B0 - n;
+
+    // quadratic formula
+    float discriminant = b * b - 4.0 * a * c;
+    if(discriminant < 0.0) {
+        return NO_INTERSECTION();
+    }
+
+    float positive_evaluation = (-1.0 * b + sqrt(discriminant)) / (2.0 * a);
+    ISect positive_isect = ISECT_OF_T(positive_evaluation);
+    if(discriminant == 0.0/* && positive_valid*/) {
+        return positive_isect;
+    }
+    float negative_evaluation = (-1.0 * b - sqrt(discriminant)) / (2.0 * a);
+    ISect negative_isect = ISECT_OF_T(negative_evaluation);
+
+    return bestISect(positive_isect, negative_isect);
+}
+
 bool rayHitsBezierBefore(vec4 R, vec4 d, vec2 cp0, vec2 cp1, vec2 cp2, float distance) {
     //
     // This should return `true` if shooting a ray from point
@@ -382,9 +507,8 @@ bool rayHitsBezierBefore(vec4 R, vec4 d, vec2 cp0, vec2 cp1, vec2 cp2, float dis
     // This is used to see the mirror's shadow.
     //
 
-    // CHANGE THIS CODE!
-
-    return false; // No shadow.
+    ISect i = rayIntersectBezier(R, d, cp0, cp1, cp2);
+    return i.yes == 1 && i.distance < distance;
 }
 
 bool rayHitsMirrorBefore(vec4 R, vec4 d, float distance) {
@@ -584,131 +708,6 @@ ISect rayClosestSphere(vec4 R, vec4 d) {
     CHECK_SPHERE_WITH_RAY(9, R, d, isect);
 
     return isect;
-}
-
-// Given control points and a fraction, give a point along the bezier curve
-// defined by the control points. Evaluate using De Casteljau's algorithm.
-vec2 deCasteljau(vec2 cp0, vec2 cp1, vec2 cp2, float fraction) {
-    // Produce point 0 by interpolating between cp0 and cp1
-    vec2 cp0_scaled = cp0 * (1.0 - fraction);
-    vec2 cp1_scaled = cp1 * fraction;
-    vec2 point0 = cp0_scaled + cp1_scaled;
-
-    // Produce point 1 by interpolating between cp1 and cp2
-    cp1_scaled = cp1 * (1.0 - fraction);
-    vec2 cp2_scaled = cp2 * fraction;
-    vec2 point1 = cp1_scaled + cp2_scaled;
-
-    // Produce final point by interpolating between point0 and point1
-    vec2 point0_scaled = point0 * (1.0 - fraction);
-    vec2 point1_scaled = point1 * fraction;
-    vec2 point_secondary = point0_scaled + point1_scaled;
-
-    return point_secondary;
-}
-
-vec4 deCasteljauVec4(vec2 cp0, vec2 cp1, vec2 cp2, float fraction) {
-    vec2 r = deCasteljau(cp0, cp1, cp2, fraction);
-    return vec4(r.x, 0.0, r.y, 1.0);
-}
-
-// https://pomax.github.io/bezierinfo/#pointvectors
-vec2 bezierDerivative(vec2 P0, vec2 P1, vec2 P2, float t) {
-    float k = 1.0; // n - 1
-    return (
-    /* binom(k, 0.0) */ 1.0 * pow((1.0 - t), (k - 0.0)) * pow(t, 0.0) * 2.0 * (P1 - P0) +
-    /* binom(k, 1.0) */ 1.0 * pow((1.0 - t), (k - 1.0)) * pow(t, 1.0) * 2.0 * (P2 - P1)
-    );
-}
-
-vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t) {
-    vec2 tangent = bezierDerivative(P0, P1, P2, t);
-    float rotation = -1.0;
-    if (tangent.x < 0.0) {
-        rotation = 1.0;
-    }
-    return vec2(tangent.y, rotation * tangent.x);
-}
-
-vec4 bezierNormalVec4(vec2 P0, vec2 P1, vec2 P2, float t) {
-    vec2 r = bezierNormal(P0, P1, P2, t);
-    return vec4(r.x, 0.0, r.y, 0.0);
-}
-
-bool t_is_valid(float t) {
-    return t >= 0.0 && t <= 1.0;
-}
-
-ISect isect_of_t(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2, float t) {
-    if(!t_is_valid(t)) return NO_INTERSECTION();
-    ISect i = rayIntersectPlane(R, d, deCasteljauVec4(P0, P1, P2, t), bezierNormalVec4(P0, P1, P2, t));
-    if(i.location.y < EPSILON || i.location.y > 1.5) return NO_INTERSECTION();
-    return i;
-}
-
-#define ISECT_OF_T(t) isect_of_t(R, d, P0, P1, P2, t)
-
-// https://www.desmos.com/calculator/a5zllcbzni
-ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
-    //
-    // This should return intersection information that results
-    // from shooting a ray from point `R` in a direction `d`,
-    // possibly hitting a Bezier mirror. If the mirror is hit,
-    // then the ISect struct should contain the location point
-    // where it was hit, the surface normal where it was hit,
-    // and its distance from the point along that ray. The `yes`
-    // component of the `ISect` should be set to 1.
-    //
-    // If they don't intersect, return NO_INTERSECTION().
-    //
-    // The mirror is given by control points whose floor
-    // coordinates sit at `cp0`, `cp1`, and `cp2`. You can make
-    // the mirror have any height you like. My demo used a
-    // height of 1.5.
-    //
-
-    vec4 R2 = R + d;
-    float y1 = R.z;
-    float y2 = R2.z;
-    float x1 = R.x;
-    float x2 = R2.x;
-
-    // get l, m, n in lx+my=n
-    // https://stackoverflow.com/a/13242831
-    float l = y1 - y2;
-    float m = x2 - x1;
-    float n = ((x1 - x2) * y1 + (y2 - y1) * x1) * -1.0;
-    vec2 A = vec2(l, m);
-
-    // equation of a quadratic bezier is C(t) = (1-t)^2 * P_0 + 2t(1-t) * P_1 + t^2 * P_2
-    // we need to solve (1-t)^2 * (A dot P_0) + 2t(1-t) * (A dot P_1) + t^2 * (A dot P_2) - d = 0
-
-    // let Bx = A dot Px
-    float B0 = dot(A, P0);
-    float B1 = dot(A, P1);
-    float B2 = dot(A, P2);
-
-    // solve 0=(B_{2}-2B_{1}+B_{0})t^{2}+(2B_{1}-2B_{0})t+(B_{0}-d)
-    // variables for quadratic formula
-    float a = B2 - 2.0 * B1 + B0;
-    float b = 2.0 * B1 - 2.0 * B0;
-    float c = B0 - n;
-
-    // quadratic formula
-    float discriminant = b * b - 4.0 * a * c;
-    if(discriminant < 0.0) {
-        return NO_INTERSECTION();
-    }
-
-    float positive_evaluation = (-1.0 * b + sqrt(discriminant)) / (2.0 * a);
-    ISect positive_isect = ISECT_OF_T(positive_evaluation);
-    if(discriminant == 0.0/* && positive_valid*/) {
-        return positive_isect;
-    }
-    float negative_evaluation = (-1.0 * b - sqrt(discriminant)) / (2.0 * a);
-    ISect negative_isect = ISECT_OF_T(negative_evaluation);
-
-    return bestISect(positive_isect, negative_isect);
 }
 
 ISect rayIntersectMirror(vec4 R, vec4 d) {
