@@ -405,11 +405,15 @@ vec2 bezierDerivative(vec2 P0, vec2 P1, vec2 P2, float t) {
 
 vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t) {
     vec2 tangent = bezierDerivative(P0, P1, P2, t);
-    float rotation = -1.0;
+    float rotation_x = -1.0;
+    float rotation_y = -1.0;
     if (tangent.x < 0.0) {
-        rotation = 1.0;
+        rotation_x = 1.0;
     }
-    return vec2(tangent.y, rotation * tangent.x);
+    if (tangent.y < 0.0) {
+        rotation_y = 1.0;
+    }
+    return vec2(rotation_y * tangent.y, rotation_x * tangent.x);
 }
 
 vec4 bezierNormalVec4(vec2 P0, vec2 P1, vec2 P2, float t) {
@@ -478,10 +482,11 @@ ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
 
     // quadratic formula
     float discriminant = b * b - 4.0 * a * c;
+    /*
     if(discriminant < 0.0) {
         return NO_INTERSECTION();
     }
-
+    */
     float positive_evaluation = (-1.0 * b + sqrt(discriminant)) / (2.0 * a);
     ISect positive_isect = ISECT_OF_T(positive_evaluation);
     if(discriminant == 0.0) {
@@ -508,7 +513,7 @@ bool rayHitsBezierBefore(vec4 R, vec4 d, vec2 cp0, vec2 cp1, vec2 cp2, float dis
     //
 
     ISect i = rayIntersectBezier(R, d, cp0, cp1, cp2);
-    return i.yes == 1 && i.distance < distance;
+    return (i.yes == 1) && (i.distance < distance);
 }
 
 bool rayHitsMirrorBefore(vec4 R, vec4 d, float distance) {
