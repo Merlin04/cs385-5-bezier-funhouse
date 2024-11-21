@@ -590,40 +590,61 @@ ISect rayClosestSphere(vec4 R, vec4 d) {
 // defined by the control points. Evaluate using De Casteljau's algorithm.
 vec2 deCasteljau(vec2 cp0, vec2 cp1, vec2 cp2, float fraction) {
     // Produce point 0 by interpolating between cp0 and cp1
-    const vec2 cp0_scaled = cp0 * vec2(1 - fraction, 1 - fraction);
-    vec2 cp1_scaled = cp1 * vec2(fraction, fraction);
-    const vec2 point0 = cp0_scaled + cp1_scaled;
+    vec2 cp0_scaled = cp0 * (1.0 - fraction);
+    vec2 cp1_scaled = cp1 * fraction;
+    vec2 point0 = cp0_scaled + cp1_scaled;
 
     // Produce point 1 by interpolating between cp1 and cp2
-    cp1_scaled = cp1 * vec2(1 - fraction, 1 - fraction);
-    const vec2 cp2_scaled = cp2 * vec2(fraction, fraction);
-    const vec2 point1 = cp1_scaled + cp2_scaled;
+    cp1_scaled = cp1 * (1.0 - fraction);
+    vec2 cp2_scaled = cp2 * fraction;
+    vec2 point1 = cp1_scaled + cp2_scaled;
 
     // Produce final point by interpolating between point0 and point1
-    const vec2 point0_scaled = point0 * vec2(1 - fraction, 1 - fraction);
-    const vec2 point1_scaled = point1 * vec2(fraction, fraction);
-    const vec2 point_secondary = point0_scaled + point1_scaled;
+    vec2 point0_scaled = point0 * (1.0 - fraction);
+    vec2 point1_scaled = point1 * fraction;
+    vec2 point_secondary = point0_scaled + point1_scaled;
 
     return point_secondary;
 }
 
+vec4 deCasteljauVec4(vec2 cp0, vec2 cp1, vec2 cp2, float fraction) {
+    vec2 r = deCasteljau(cp0, cp1, cp2, fraction);
+    return vec4(r.x, 0.0, r.y, 1.0);
+}
+
 // https://pomax.github.io/bezierinfo/#pointvectors
 vec2 bezierDerivative(vec2 P0, vec2 P1, vec2 P2, float t) {
-    float k = 1; // n - 1
+    float k = 1.0; // n - 1
     return (
-    /* binom(k, 0) */ 1 * pow((1 - t), (k - 0)) * pow(t, 0) * 2 * (P1 - P0) +
-    /* binom(k, 1) */ 1 * pow((1 - t), (k - 1)) * pow(t, 1) * 2 * (P2 - P1)
+    /* binom(k, 0.0) */ 1.0 * pow((1.0 - t), (k - 0.0)) * pow(t, 0.0) * 2.0 * (P1 - P0) +
+    /* binom(k, 1.0) */ 1.0 * pow((1.0 - t), (k - 1.0)) * pow(t, 1.0) * 2.0 * (P2 - P1)
     );
 }
 
 vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t) {
     vec2 tangent = bezierDerivative(P0, P1, P2, t);
-    return vec2(-1 * tangent.y, tangent.x);
+    return vec2(-1.0 * tangent.y, tangent.x);
 }
 
-#define ISECT_AT_T(t) \
-    rayIntersectPlane(R, d, deCasteljau(P0, P1, P2, t), bezierNormal(P0, P1, P2, t))
+vec4 bezierNormalVec4(vec2 P0, vec2 P1, vec2 P2, float t) {
+    vec2 r = bezierNormal(P0, P1, P2, t);
+    return vec4(r.x, 0.0, r.y, 0.0);
+}
 
+bool t_is_valid(float t) {
+    return t >= 0.0 && t <= 1.0;
+}
+
+ISect isect_of_t(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2, float t) {
+    if(!t_is_valid(t)) return NO_INTERSECTION();
+    ISect i = rayIntersectPlane(R, d, deCasteljauVec4(P0, P1, P2, t), bezierNormalVec4(P0, P1, P2, t));
+    if(i.location.y < EPSILON || i.location.y > 1.5) return NO_INTERSECTION();
+    return i;
+}
+
+#define ISECT_OF_T(t) isect_of_t(R, d, P0, P1, P2, t)
+
+// https://www.desmos.com/calculator/a5zllcbzni
 ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
     //
     // This should return intersection information that results
@@ -642,22 +663,17 @@ ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
     // height of 1.5.
     //
 
-    // line from eyePosition to R
-//    float y1 = eyePosition.y;
-//    float y2 = R.y;
-//    float x1 = eyePosition.x;
-//    float x2 = R.x;
     vec4 R2 = R + d;
-    float y1 = R.y;
-    float y2 = R2.y;
+    float y1 = R.z;
+    float y2 = R2.z;
     float x1 = R.x;
     float x2 = R2.x;
 
-    // get l, m, d in lx+my=d
+    // get l, m, n in lx+my=n
     // https://stackoverflow.com/a/13242831
     float l = y1 - y2;
     float m = x2 - x1;
-    float d = (x1 - x2) * y1 + (y2 - y1) * x1 * -1;
+    float n = ((x1 - x2) * y1 + (y2 - y1) * x1) * -1.0;
     vec2 A = vec2(l, m);
 
     // equation of a quadratic bezier is C(t) = (1-t)^2 * P_0 + 2t(1-t) * P_1 + t^2 * P_2
@@ -670,22 +686,25 @@ ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
 
     // solve 0=(B_{2}-2B_{1}+B_{0})t^{2}+(2B_{1}-2B_{0})t+(B_{0}-d)
     // variables for quadratic formula
-    float a = B2 - 2 * B1 + B0;
-    float b = 2 * B1 - 2 * B0;
-    float c = B0 - d;
+    float a = B2 - 2.0 * B1 + B0;
+    float b = 2.0 * B1 - 2.0 * B0;
+    float c = B0 - n;
 
     // quadratic formula
-    float discriminant = b * b - 4 * a * c;
-    if(discriminant < 0) {
+    float discriminant = b * b - 4.0 * a * c;
+    if(discriminant < 0.0) {
         return NO_INTERSECTION();
     }
 
-    float positive_evaluation = (-1 * b + sqrt(discriminant)) / (2 * a);
-    if(discriminant = 0) {
-        return ISECT_AT_T(positive_evaluation);
+    float positive_evaluation = (-1.0 * b + sqrt(discriminant)) / (2.0 * a);
+    ISect positive_isect = ISECT_OF_T(positive_evaluation);
+    if(discriminant == 0.0/* && positive_valid*/) {
+        return positive_isect;
     }
-    float negative_evaluation = (-1 * b - sqrt(discriminant)) / (2 * a);
-    return bestISect(ISECT_AT_T(positive_evaluation), ISECT_AT_T(negative_evaluation));
+    float negative_evaluation = (-1.0 * b - sqrt(discriminant)) / (2.0 * a);
+    ISect negative_isect = ISECT_OF_T(negative_evaluation);
+
+    return bestISect(positive_isect, negative_isect);
 }
 
 ISect rayIntersectMirror(vec4 R, vec4 d) {
