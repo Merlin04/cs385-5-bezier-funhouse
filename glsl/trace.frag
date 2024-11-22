@@ -512,7 +512,7 @@ bool rayHitsBezierBefore(vec4 R, vec4 d, vec2 cp0, vec2 cp1, vec2 cp2, float dis
     // This is used to see the mirror's shadow.
     //
 
-    ISect i = rayIntersectBezier(R, d, cp0, cp1, cp2);
+    ISect i = rayIntersectBezier(R, d, cp0, cp1, cp2, true);
     return (i.yes == 1) && (i.distance < distance);
 }
 
@@ -524,7 +524,7 @@ bool rayHitsMirrorBefore(vec4 R, vec4 d, float distance) {
         vec2 cp0 = vec2(controlPoints[0], controlPoints[1]);
         vec2 cp1 = vec2(controlPoints[2], controlPoints[3]);
         vec2 cp2 = vec2(controlPoints[4], controlPoints[5]);
-        hits = rayHitsBezierBefore(R, d, cp0, cp1, cp2, distance, true);
+        hits = rayHitsBezierBefore(R, d, cp0, cp1, cp2, distance);
     }
     return hits;
 }

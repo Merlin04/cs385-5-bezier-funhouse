@@ -27,3 +27,9 @@ This is implemented in `./glsl/trace.frag`, with functions:
 
 # Step 4: Raytracing the Funhouse Mirror 
 At this point, no further work was necessary. Since the mirror was calculated algebraically for each ray, the approximation is already smooth. 
+
+# Screenshots
+
+![img1.png](img1.png)
+
+![img2.png](img2.png)
