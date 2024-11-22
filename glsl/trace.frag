@@ -403,11 +403,11 @@ vec2 bezierDerivative(vec2 P0, vec2 P1, vec2 P2, float t) {
     );
 }
 
-vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t) {
+vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t, bool isShadow) {
     vec2 tangent = bezierDerivative(P0, P1, P2, t);
     float rotation_x = -1.0;
     float rotation_y = -1.0;
-    if (tangent.x < 0.0) {
+    if (tangent.x < 0.0 && !isShadow) {
         rotation_x = 1.0;
     }
     if (tangent.y < 0.0) {
@@ -416,8 +416,8 @@ vec2 bezierNormal(vec2 P0, vec2 P1, vec2 P2, float t) {
     return vec2(rotation_y * tangent.y, rotation_x * tangent.x);
 }
 
-vec4 bezierNormalVec4(vec2 P0, vec2 P1, vec2 P2, float t) {
-    vec2 r = bezierNormal(P0, P1, P2, t);
+vec4 bezierNormalVec4(vec2 P0, vec2 P1, vec2 P2, float t, bool isShadow) {
+    vec2 r = bezierNormal(P0, P1, P2, t, isShadow);
     return vec4(r.x, 0.0, r.y, 0.0);
 }
 
@@ -425,17 +425,17 @@ bool t_is_valid(float t) {
     return t >= 0.0 && t <= 1.0;
 }
 
-ISect isect_of_t(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2, float t) {
+ISect isect_of_t(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2, float t, bool isShadow) {
     if(!t_is_valid(t)) return NO_INTERSECTION();
-    ISect i = rayIntersectPlane(R, d, deCasteljauVec4(P0, P1, P2, t), bezierNormalVec4(P0, P1, P2, t));
+    ISect i = rayIntersectPlane(R, d, deCasteljauVec4(P0, P1, P2, t), bezierNormalVec4(P0, P1, P2, t, isShadow));
     if(i.location.y < EPSILON || i.location.y > 1.5) return NO_INTERSECTION();
     return i;
 }
 
-#define ISECT_OF_T(t) isect_of_t(R, d, P0, P1, P2, t)
+#define ISECT_OF_T(t) isect_of_t(R, d, P0, P1, P2, t, isShadow)
 
 // https://www.desmos.com/calculator/a5zllcbzni
-ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2) {
+ISect rayIntersectBezier(vec4 R, vec4 d, vec2 P0, vec2 P1, vec2 P2, bool isShadow) {
     //
     // This should return intersection information that results
     // from shooting a ray from point `R` in a direction `d`,
@@ -524,7 +524,7 @@ bool rayHitsMirrorBefore(vec4 R, vec4 d, float distance) {
         vec2 cp0 = vec2(controlPoints[0], controlPoints[1]);
         vec2 cp1 = vec2(controlPoints[2], controlPoints[3]);
         vec2 cp2 = vec2(controlPoints[4], controlPoints[5]);
-        hits = rayHitsBezierBefore(R, d, cp0, cp1, cp2, distance);
+        hits = rayHitsBezierBefore(R, d, cp0, cp1, cp2, distance, true);
     }
     return hits;
 }
@@ -736,7 +736,7 @@ ISect rayIntersectMirror(vec4 R, vec4 d) {
         vec2 cp0 = vec2(controlPoints[0], controlPoints[1]);
         vec2 cp1 = vec2(controlPoints[2], controlPoints[3]);
         vec2 cp2 = vec2(controlPoints[4], controlPoints[5]);
-        isect = rayIntersectBezier(R, d, cp0, cp1, cp2);
+        isect = rayIntersectBezier(R, d, cp0, cp1, cp2, false);
     }
 
     return isect;
