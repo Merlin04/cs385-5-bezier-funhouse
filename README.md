@@ -1,7 +1,7 @@
 # CSCI 385 Project 5
 B Smith and Connor Gilligan
 
-# Step 1: Compiling the Editor Curve 
+# Step 1: Compiling the Editor Curve
 
 The editor curve is compiled using de Casteljau's subdivision scheme in `curve.ts`. It recursively calls the `compile` method on the `Curve` class; a `goodEnough` function uses the method described in lecture to determine if segments between the control points are a good enough approximation of the segments of the curve. If this isn't the case, it splits the curve into two (at the middle point, where t=0.5), compiles both halves, then sets the points array to be the concatenation of the respective arrays of the halves.
 
@@ -23,10 +23,19 @@ This is implemented in `./glsl/trace.frag`, with functions:
   - Evaluate the discriminant of the quadratic formula to determine how many solutions there are to the equation, then for each of them evaluate the solution then call `isect_of_t` to get the ISect struct if it is indeed a valid intersection
   - If there are multiple intersections, use `bestISect` to choose one
 
-# Step 3: Shadows 
+# Step 3: Shadows
 
-# Step 4: Raytracing the Funhouse Mirror 
-At this point, no further work was necessary. Since the mirror was calculated algebraically for each ray, the approximation is already smooth. 
+This is implemented in `./glsl/trace.frag`, where `rayHitsBezierBefore` calls
+`rayIntersectBezier`, which calls the same functions as outlined in part 2.
+This is the same code as used for ray tracing the mirror,
+but with the parameter `isShadow` set to true. That slightly tweaks the
+way normals are calculated. We found this necessary because one way of
+sign-correcting the normals resulted in functional shadows but a nonfunctional
+mirror, and another way produced a functional mirror but partially functional
+shadows.
+
+# Step 4: Raytracing the Funhouse Mirror
+At this point, no further work was necessary. Since the mirror was calculated algebraically for each ray, the approximation is already smooth.
 
 # Screenshots
 
